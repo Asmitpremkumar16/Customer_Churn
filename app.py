@@ -10,32 +10,33 @@ st.set_page_config(page_title="Churn Predictor", page_icon="🏦", layout="cente
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 class ChurnModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.network = nn.Sequential(
-            nn.Linear(11, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(64, 128),
-            nn.BatchNorm1d(128),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(128, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(64, 32),
-            nn.BatchNorm1d(32),
-            nn.ReLU(),
-            nn.Linear(32, 10),
-            nn.ReLU(),
-            nn.Linear(10, 1),
-            nn.Sigmoid()
-        )
+  def __init__(self):
+    super().__init__()
+    self.network= nn.Sequential(
+        nn.Linear(in_features= 11, out_features= 64),
+        nn.BatchNorm1d(64),
+        nn.ReLU(),
+        nn.Dropout(0.3),
+        nn.Linear(in_features= 64, out_features= 128),
+        nn.BatchNorm1d(128),
+        nn.ReLU(),
+        nn.Dropout(0.3),
+        nn.Linear(in_features= 128, out_features= 64),
+        nn.BatchNorm1d(64),
+        nn.ReLU(),
+        nn.Dropout(0.3),
+        nn.Linear(in_features= 64, out_features= 32),
+        nn.BatchNorm1d(32),
+        nn.ReLU(),
+        nn.Dropout(0.3),
+        nn.Linear(in_features=32, out_features= 10),
+        nn.ReLU(),
+        nn.Linear(in_features=10, out_features= 1),
+        nn.Sigmoid()
+    )
 
-    def forward(self, x):        
-        return self.network(x)
+  def forward(self, x):
+    return self.network(x)
 
 # ── Load model & preprocessor ─────────────────────────────────────────────────
 @st.cache_resource
