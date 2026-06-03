@@ -1,14 +1,24 @@
+# IMPORT PACKAGES
+
 import streamlit as st
 import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
 import joblib
+import plotly.express as px
 
-# ── Page config ───────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Churn Predictor", page_icon="🏦", layout="centered")
+# SET PAGE CONFIG
 
-# ── Model ─────────────────────────────────────────────────────────────────────
+st.set_page_config(page_title= "Churn Predictor", layout= 'wide')
+
+
+# LOAD DATA
+
+data= pd.read_csv("churn modelling.csv")
+
+# MODEL 
+
 class ChurnModel(nn.Module):
   def __init__(self):
     super().__init__()
@@ -37,73 +47,145 @@ class ChurnModel(nn.Module):
 
   def forward(self, x):
     return self.network(x)
+  
+# LOADING MODEL AND PREPROCESSOR
 
-# ── Load model & preprocessor ─────────────────────────────────────────────────
 @st.cache_resource
 def load_model():
-    model = ChurnModel()
-    model.load_state_dict(torch.load('ChurnModel.pth', map_location=torch.device('cpu')))
-    model.eval()
-    return model
+  model= ChurnModel()
+  model.load_state_dict(torch.load(f= "ChurnModel.pth", map_location= torch.device('cpu')))
+  model.eval()
+  return model
 
 @st.cache_resource
 def load_preprocessor():
-    with open('preprocessor.pkl', 'rb') as f:
-        return joblib.load(f)
+  with open("preprocessor.pkl", "rb") as f:
+    return joblib.load(f)
 
-model = load_model()
-preprocessor = load_preprocessor()
+model= load_model()
+preprocessor= load_preprocessor()
 
-# ── UI ────────────────────────────────────────────────────────────────────────
-st.title("🏦 Churn Predictor")
+# UI DESIGN
 
-col1, col2 = st.columns(2)
+st.sidebar.title("Churn Model Analysis")
 
-with col1:
-    credit_score = st.number_input("Credit Score",300, 850, 600)
-    age          = st.number_input("Age", 18, 100, 35)
-    tenure       = st.number_input("Tenure (years)", 0, 10, 5)
-    balance      = st.number_input("Balance ($)", 0.0, 250000.0, 50000.0)
-    num_products = st.selectbox("Number of Products", [1, 2, 3, 4])
+option= st.sidebar.radio("Select an Option", ("Analysis","Charts & Graphs","Churn Model","About"))
 
-with col2:
-    salary      = st.number_input("Estimated Salary ($)", 0.0, 200000.0, 50000.0)
-    has_cr_card = st.selectbox("Has Credit Card", ["Yes", "No"])
-    is_active   = st.selectbox("Is Active Member", ["Yes", "No"])
-    geography   = st.selectbox("Geography", ["France", "Germany", "Spain"])
-    gender      = st.selectbox("Gender", ["Female", "Male"])
+if option == "Analysis":
+    # ── Raw Data ──────────────────────────────────────────────────────────────
+    st.header("Raw DataFrame", divider=True)
+    st.dataframe(data.head(5), use_container_width=True)
 
-# ── Predict ───────────────────────────────────────────────────────────────────
-if st.button("Predict Churn"):
+    # ── Metrics ───────────────────────────────────────────────────────────────
+    st.header("Overview", divider=True)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Customers", len(data))
+    with col2:
+        st.metric("Churned", data["Exited"].sum())
+    with col3:
+        st.metric("Churn Rate", f"{data['Exited'].mean()*100:.1f}%")
 
-    # Build raw dataframe — no manual encoding needed!
-    input_df = pd.DataFrame([{
-        'CreditScore':     credit_score,
-        'Age':             age,
-        'Tenure':          tenure,
-        'Balance':         balance,
-        'EstimatedSalary': salary,
-        'Geography':       geography,
-        'Gender':          gender,
-        'NumOfProducts':   num_products,
-        'HasCrCard':       1 if has_cr_card == "Yes" else 0,
-        'IsActiveMember':  1 if is_active   == "Yes" else 0
-    }])
+    # ── Grouped Analysis ──────────────────────────────────────────────────────
+    st.header("Churn Analysis", divider=True)
 
-    # Preprocessor handles all encoding and scaling automatically
-    input_processed = preprocessor.transform(input_df)
-    input_tensor = torch.tensor(input_processed, dtype=torch.float32)
+    col1, col2 = st.columns(2)
 
-    # Predict
-    with torch.inference_mode():
-        prob = model(input_tensor).item()
-        prediction = 1 if prob >= 0.5 else 0
+    with col1:
+        st.markdown("**Exit Rate Overall (%)**")
+        st.dataframe(
+            data["Exited"]
+            .value_counts(normalize=True)
+            .mul(100).round(2)
+            .rename(index={0: "Stayed", 1: "Exited"})
+            .reset_index()
+            .rename(columns={"index": "Category", "Exited": "Percentage (%)"}),
+            use_container_width=True
+        )
 
-    # Result
-    if prediction == 1:
-        st.error(f"⚠️ High Churn Risk — {prob*100:.1f}% probability")
-    else:
-        st.success(f"✅ Low Churn Risk — {(1-prob)*100:.1f}% probability to stay")
+    with col2:
+        st.markdown("**Exit Rate by Gender & Geography (%)**")
+        st.dataframe(
+            data.groupby(["Gender", "Geography"])["Exited"]
+            .mean().mul(100).round(2)
+            .reset_index()
+            .rename(columns={"Exited": "Exit Rate (%)"}),
+            use_container_width=True
+        )
 
-    st.progress(float(prob))
-    st.caption(f"Raw probability: {prob:.4f}")
+    col3, col4 = st.columns(2)
+
+    with col3:
+        st.markdown("**Exit Rate by Gender & Active Member (%)**")
+        st.dataframe(
+            data.groupby(["Gender", "IsActiveMember"])["Exited"]
+            .mean().mul(100).round(2)
+            .reset_index()
+            .rename(columns={
+                "IsActiveMember": "Active Member",
+                "Exited": "Exit Rate (%)"
+            }),
+            use_container_width=True
+        )
+
+    with col4:
+        st.markdown("**Exit Rate by Products & Active Member (%)**")
+        st.dataframe(
+            data.groupby(["NumOfProducts", "IsActiveMember"])["Exited"]
+            .mean().mul(100).round(2)
+            .reset_index()
+            .rename(columns={
+                "NumOfProducts":  "No. of Products",
+                "IsActiveMember": "Active Member",
+                "Exited":         "Exit Rate (%)"
+            }),
+            use_container_width=True
+        )
+
+if option == "Charts & Graphs":
+    st.header("Charts", divider=True)
+
+    # ── Chart 1 — Geography by Exited ────────────────────────────────────────
+    fig1 = px.histogram(
+        data, x="Geography",
+        color="IsActiveMember",
+        facet_col="Exited",
+        barmode='group',
+        title="Geography by Exited",
+        text_auto=True,
+        labels={"IsActiveMember": "Active Member"}  # ✅ readable legend
+    )
+    fig1.update_traces(textposition='outside')
+    st.plotly_chart(fig1, use_container_width=True)
+
+    # ── Chart 2 — Correlation Heatmap ────────────────────────────────────────
+    df = data[["CreditScore", "Age", "Tenure", "Balance", "NumOfProducts",
+               "HasCrCard", "IsActiveMember", "EstimatedSalary", "Exited"]].corr()
+    fig2 = px.imshow(df, text_auto=".2f", title="Correlation Heatmap",
+                     color_continuous_scale="RdBu_r")  # ✅ better color scale
+    fig2.update_layout(height=600)
+    st.plotly_chart(fig2, use_container_width=True)
+
+    # ── Chart 3 & 4 side by side ─────────────────────────────────────────────
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig3 = px.histogram(
+            data, x="Age",
+            color="Exited",
+            barmode='overlay',
+            opacity=0.6,
+            title="Age Distribution — Churned vs Retained",
+            labels={"Exited": "Exited"}      # ✅ readable legend
+        )
+        st.plotly_chart(fig3, use_container_width=True)
+
+    with col2:
+        fig4 = px.histogram(
+            data, x="EstimatedSalary",
+            color="Exited",
+            opacity=0.6,
+            title="Churn across Estimated Salary",  # ✅ fixed title (was "Balance")
+            labels={"Exited": "Exited"}
+        )
+        st.plotly_chart(fig4, use_container_width=True)
