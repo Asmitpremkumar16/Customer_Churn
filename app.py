@@ -189,3 +189,7 @@ if option == "Charts & Graphs":
             labels={"Exited": "Exited"}
         )
         st.plotly_chart(fig4, use_container_width=True)
+    col5= st.columns(1)
+
+if option == "Churn Model":
+   pass
