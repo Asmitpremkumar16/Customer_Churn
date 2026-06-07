@@ -7,13 +7,16 @@ import numpy as np
 import pandas as pd
 import joblib
 import plotly.express as px
+import plotly.figure_factory as ff
+from sklearn.metrics import classification_report, confusion_matrix
+
 
 # SET PAGE CONFIG
 
 st.set_page_config(page_title= "Churn Predictor", layout= 'wide')
 
 
-# LOAD DATA
+# LOAD DATA----------------------------------------------------------------------------------
 
 data= pd.read_csv("churn modelling.csv")
 
@@ -48,7 +51,7 @@ class ChurnModel(nn.Module):
   def forward(self, x):
     return self.network(x)
   
-# LOADING MODEL AND PREPROCESSOR
+# LOADING MODEL AND PREPROCESSOR----------------------------------------------------------------------------------
 
 @st.cache_resource
 def load_model():
@@ -65,18 +68,20 @@ def load_preprocessor():
 model= load_model()
 preprocessor= load_preprocessor()
 
-# UI DESIGN
+# UI DESIGN----------------------------------------------------------------------------------
 
 st.sidebar.title("Churn Model Analysis")
 
-option= st.sidebar.radio("Select an Option", ("Analysis","Charts & Graphs","Churn Model","About"))
+option= st.sidebar.radio("Select an Option", ("Analysis","Charts & Graphs","Churn Model","Model Performance","About"))
+
+# Analysis Section----------------------------------------------------------------------------------
 
 if option == "Analysis":
-    # ── Raw Data ──────────────────────────────────────────────────────────────
+    # Raw Data
     st.header("Raw DataFrame", divider=True)
     st.dataframe(data.head(5), use_container_width=True)
 
-    # ── Metrics ───────────────────────────────────────────────────────────────
+    #  Metrics 
     st.header("Overview", divider=True)
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -86,7 +91,7 @@ if option == "Analysis":
     with col3:
         st.metric("Churn Rate", f"{data['Exited'].mean()*100:.1f}%")
 
-    # ── Grouped Analysis ──────────────────────────────────────────────────────
+    #  Grouped Analysis 
     st.header("Churn Analysis", divider=True)
 
     col1, col2 = st.columns(2)
@@ -142,10 +147,12 @@ if option == "Analysis":
             use_container_width=True
         )
 
+# Charts and Graphs Section----------------------------------------------------------------------------------
+
 if option == "Charts & Graphs":
     st.header("Charts", divider=True)
 
-    # ── Chart 1 — Geography by Exited ────────────────────────────────────────
+    #  Chart 1 — Geography by Exited 
     fig1 = px.histogram(
         data, x="Geography",
         color="IsActiveMember",
@@ -153,20 +160,20 @@ if option == "Charts & Graphs":
         barmode='group',
         title="Geography by Exited",
         text_auto=True,
-        labels={"IsActiveMember": "Active Member"}  # ✅ readable legend
+        labels={"IsActiveMember": "Active Member"}
     )
     fig1.update_traces(textposition='outside')
     st.plotly_chart(fig1, use_container_width=True)
 
-    # ── Chart 2 — Correlation Heatmap ────────────────────────────────────────
+    #  Chart 2 — Correlation Heatmap 
     df = data[["CreditScore", "Age", "Tenure", "Balance", "NumOfProducts",
                "HasCrCard", "IsActiveMember", "EstimatedSalary", "Exited"]].corr()
     fig2 = px.imshow(df, text_auto=".2f", title="Correlation Heatmap",
-                     color_continuous_scale="RdBu_r")  # ✅ better color scale
+                     color_continuous_scale="RdBu_r")
     fig2.update_layout(height=600)
     st.plotly_chart(fig2, use_container_width=True)
 
-    # ── Chart 3 & 4 side by side ─────────────────────────────────────────────
+    #  Chart 3 & 4 side by side 
     col1, col2 = st.columns(2)
 
     with col1:
@@ -176,7 +183,7 @@ if option == "Charts & Graphs":
             barmode='overlay',
             opacity=0.6,
             title="Age Distribution — Churned vs Retained",
-            labels={"Exited": "Exited"}      # ✅ readable legend
+            labels={"Exited": "Exited"}
         )
         st.plotly_chart(fig3, use_container_width=True)
 
@@ -185,11 +192,152 @@ if option == "Charts & Graphs":
             data, x="EstimatedSalary",
             color="Exited",
             opacity=0.6,
-            title="Churn across Estimated Salary",  # ✅ fixed title (was "Balance")
+            title="Churn across Estimated Salary",
             labels={"Exited": "Exited"}
         )
         st.plotly_chart(fig4, use_container_width=True)
     col5= st.columns(1)
 
+
+# Churn Prediction Section----------------------------------------------------------------------------------
+
 if option == "Churn Model":
-   pass
+    st.header("Churn Model", divider= True)
+    
+    # Columns Creation for UI   
+    col1, col2 = st.columns(2)
+
+    with col1:
+        credit_score = st.number_input("Credit Score",300, 850, 600)
+        age          = st.number_input("Age", 18, 100, 35)
+        tenure       = st.number_input("Tenure (years)", 0, 10, 5)
+        balance      = st.number_input("Balance ($)", 0.0, 250000.0, 50000.0)
+        num_products = st.selectbox("Number of Products", [1, 2, 3, 4])
+
+    with col2:
+        salary      = st.number_input("Estimated Salary ($)", 0.0, 200000.0, 50000.0)
+        has_cr_card = st.selectbox("Has Credit Card", ["Yes", "No"])
+        is_active   = st.selectbox("Is Active Member", ["Yes", "No"])
+        geography   = st.selectbox("Geography", ["France", "Germany", "Spain"])
+        gender      = st.selectbox("Gender", ["Female", "Male"])
+    
+    # Prediction 
+    if st.button("Predict Churn"):
+
+        input_df = pd.DataFrame([{
+            'CreditScore':     credit_score,
+            'Age':             age,
+            'Tenure':          tenure,
+            'Balance':         balance,
+            'EstimatedSalary': salary,
+            'Geography':       geography,
+            'Gender':          gender,
+            'NumOfProducts':   num_products,
+            'HasCrCard':       1 if has_cr_card == "Yes" else 0,
+            'IsActiveMember':  1 if is_active   == "Yes" else 0
+        }])
+
+        input_processed = preprocessor.transform(input_df)
+        input_tensor = torch.tensor(input_processed, dtype=torch.float32)
+
+        with torch.inference_mode():
+            prob = model(input_tensor).item()
+            prediction = 1 if prob >= 0.5 else 0
+
+        if prediction == 1:
+            st.error(f"High Churn Risk — {prob*100:.1f}% probability")
+        else:
+            st.success(f"Low Churn Risk — {(1-prob)*100:.1f}% probability to stay")
+
+        st.progress(float(prob))
+        st.caption(f"Raw probability: {prob:.4f}") 
+
+
+# Model Performance Section----------------------------------------------------------------------------------
+
+
+if option == "Model Performance":
+    st.header("Model Performance", divider=True)
+ 
+    # Hardcoded results from your best model
+    report_data = {
+        "Class":      ["Stayed (0)", "Churned (1)", "Macro Avg", "Weighted Avg"],
+        "Precision":  [0.93,         0.47,          0.70,        0.83],
+        "Recall":     [0.79,         0.75,          0.77,        0.78],
+        "F1-Score":   [0.85,         0.58,          0.72,        0.80],
+        "Support":    [1593,         407,           2000,        2000]
+    }
+ 
+    #  Top Metrics 
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Accuracy",          "78%")
+    with col2:
+        st.metric("Class 1 Recall",    "75%",  help="% of actual churners correctly identified")
+    with col3:
+        st.metric("Class 1 Precision", "47%",  help="% of predicted churners that actually churned")
+    with col4:
+        st.metric("Class 1 F1 Score",  "0.58", help="Balance between precision and recall")
+ 
+    #  Classification Report Table 
+    st.subheader("Classification Report")
+    st.dataframe(pd.DataFrame(report_data), use_container_width=True)
+ 
+    #  Confusion Matrix 
+    st.subheader("Confusion Matrix")
+ 
+    cm = [[1258, 335],   # Actual 0: Stayed
+          [102,  305]]   # Actual 1: Churned
+ 
+    fig_cm = ff.create_annotated_heatmap(
+        cm,
+        x=["Predicted Stayed", "Predicted Churned"],
+        y=["Actual Stayed",    "Actual Churned"],
+        colorscale="Blues",
+        showscale=True
+    )
+    fig_cm.update_layout(title="Confusion Matrix", height=400)
+    st.plotly_chart(fig_cm, use_container_width=True)
+ 
+    #  Precision Recall F1 Bar Chart 
+    st.subheader("Precision vs Recall vs F1-Score")
+ 
+    metrics_df = pd.DataFrame({
+        "Metric":    ["Precision", "Recall", "F1-Score"] * 2,
+        "Value":     [0.93, 0.79, 0.85, 0.47, 0.75, 0.58],
+        "Class":     ["Stayed (0)"] * 3 + ["Churned (1)"] * 3
+    })
+ 
+    fig_bar = px.bar(
+        metrics_df,
+        x="Metric",
+        y="Value",
+        color="Class",
+        barmode="group",
+        title="Precision, Recall & F1-Score by Class",
+        text_auto=".2f",
+        range_y=[0, 1]
+    )
+    fig_bar.update_traces(textposition='outside')
+    st.plotly_chart(fig_bar, use_container_width=True)
+ 
+    #  Model Info 
+    st.subheader("Model Architecture")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.dataframe(pd.DataFrame({
+            "Parameter":  ["Model Type", "Input Features", "Hidden Layers", "Optimizer", "Loss Function", "Early Stopping"],
+            "Value":      ["ANN",        "11",             "4",             "Adam",      "BCELoss",        "Yes (patience=50)"]
+        }), use_container_width=True)
+    with col2:
+        st.dataframe(pd.DataFrame({
+            "Parameter": ["Learning Rate", "Dropout",  "Batch Norm", "Epochs",    "SMOTE",  "Scaler"],
+            "Value":     ["0.01",          "0.3",      "Yes",        "~83",       "Yes",    "StandardScaler"]
+        }), use_container_width=True)
+
+
+# About Section----------------------------------------------------------------------------------
+
+if option == "About":
+    pass
+    
