@@ -91,7 +91,7 @@ if option == "Analysis":
     with col3:
         st.metric("Churn Rate", f"{data['Exited'].mean()*100:.1f}%")
 
-    #  Grouped Analysis 
+    #  Grouped Analysis using groupby
     st.header("Churn Analysis", divider=True)
 
     col1, col2 = st.columns(2)
@@ -146,13 +146,19 @@ if option == "Analysis":
             }),
             use_container_width=True
         )
+    st.info("""
+    **Key Insights from Analysis:**
+    - **Geography** - Germany has the highest churn rate compared to France and Spain
+    - **Gender** - Female customers churn more than Male customers
+    - **Active Members** - Inactive members are significantly more likely to churn
+    """)
 
 # Charts and Graphs Section----------------------------------------------------------------------------------
 
 if option == "Charts & Graphs":
     st.header("Charts", divider=True)
 
-    #  Chart 1 — Geography by Exited 
+    #  Geography by Exited 
     fig1 = px.histogram(
         data, x="Geography",
         color="IsActiveMember",
@@ -165,13 +171,21 @@ if option == "Charts & Graphs":
     fig1.update_traces(textposition='outside')
     st.plotly_chart(fig1, use_container_width=True)
 
-    #  Chart 2 — Correlation Heatmap 
+    #  Correlation Heatmap 
     df = data[["CreditScore", "Age", "Tenure", "Balance", "NumOfProducts",
                "HasCrCard", "IsActiveMember", "EstimatedSalary", "Exited"]].corr()
     fig2 = px.imshow(df, text_auto=".2f", title="Correlation Heatmap",
                      color_continuous_scale="RdBu_r")
     fig2.update_layout(height=600)
     st.plotly_chart(fig2, use_container_width=True)
+
+    #  Heatmap Info
+    st.info("""
+    **Key Insights from Correlation Heatmap:**
+    - **Age** - Older customers are more likely to churn (as below histogram plot)
+    - **Balance** - Higher balance customers tend to churn slightly more
+    - **IsActiveMember** - Inactive members show the strongest negative correlation with retention
+    """)
 
     #  Chart 3 & 4 side by side 
     col1, col2 = st.columns(2)
@@ -204,7 +218,7 @@ if option == "Charts & Graphs":
 if option == "Churn Model":
     st.header("Churn Model", divider= True)
     
-    # Columns Creation for UI   
+    # Columns Creation for UI with default inputs 
     col1, col2 = st.columns(2)
 
     with col1:
@@ -221,7 +235,7 @@ if option == "Churn Model":
         geography   = st.selectbox("Geography", ["France", "Germany", "Spain"])
         gender      = st.selectbox("Gender", ["Female", "Male"])
     
-    # Prediction 
+    # Prediction Button
     if st.button("Predict Churn"):
 
         input_df = pd.DataFrame([{
@@ -237,6 +251,8 @@ if option == "Churn Model":
             'IsActiveMember':  1 if is_active   == "Yes" else 0
         }])
 
+        #  Processing the input dataframe
+
         input_processed = preprocessor.transform(input_df)
         input_tensor = torch.tensor(input_processed, dtype=torch.float32)
 
@@ -250,7 +266,7 @@ if option == "Churn Model":
             st.success(f"Low Churn Risk — {(1-prob)*100:.1f}% probability to stay")
 
         st.progress(float(prob))
-        st.caption(f"Raw probability: {prob:.4f}") 
+        st.caption(f"Raw probability of leaving: {prob:.4f}") 
 
 
 # Model Performance Section----------------------------------------------------------------------------------
@@ -259,7 +275,7 @@ if option == "Churn Model":
 if option == "Model Performance":
     st.header("Model Performance", divider=True)
  
-    # Hardcoded results from your best model
+    # Results from the ANN model
     report_data = {
         "Class":      ["Stayed (0)", "Churned (1)", "Macro Avg", "Weighted Avg"],
         "Precision":  [0.93,         0.47,          0.70,        0.83],
@@ -271,13 +287,13 @@ if option == "Model Performance":
     #  Top Metrics 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Accuracy",          "78%")
+        st.metric("Accuracy", "78%")
     with col2:
-        st.metric("Class 1 Recall",    "75%",  help="% of actual churners correctly identified")
+        st.metric("Class 1 Recall", "75%", help="% of actual churners correctly identified")
     with col3:
-        st.metric("Class 1 Precision", "47%",  help="% of predicted churners that actually churned")
+        st.metric("Class 1 Precision", "47%", help="% of predicted churners that actually churned")
     with col4:
-        st.metric("Class 1 F1 Score",  "0.58", help="Balance between precision and recall")
+        st.metric("Class 1 F1 Score", "0.58", help="Balance between precision and recall")
  
     #  Classification Report Table 
     st.subheader("Classification Report")
@@ -292,7 +308,7 @@ if option == "Model Performance":
     fig_cm = ff.create_annotated_heatmap(
         cm,
         x=["Predicted Stayed", "Predicted Churned"],
-        y=["Actual Stayed",    "Actual Churned"],
+        y=["Actual Stayed", "Actual Churned"],
         colorscale="Blues",
         showscale=True
     )
@@ -303,9 +319,9 @@ if option == "Model Performance":
     st.subheader("Precision vs Recall vs F1-Score")
  
     metrics_df = pd.DataFrame({
-        "Metric":    ["Precision", "Recall", "F1-Score"] * 2,
-        "Value":     [0.93, 0.79, 0.85, 0.47, 0.75, 0.58],
-        "Class":     ["Stayed (0)"] * 3 + ["Churned (1)"] * 3
+        "Metric": ["Precision", "Recall", "F1-Score"] * 2,
+        "Value":  [0.93, 0.79, 0.85, 0.47, 0.75, 0.58],
+        "Class":  ["Stayed (0)"] * 3 + ["Churned (1)"] * 3
     })
  
     fig_bar = px.bar(
@@ -326,18 +342,74 @@ if option == "Model Performance":
     col1, col2 = st.columns(2)
     with col1:
         st.dataframe(pd.DataFrame({
-            "Parameter":  ["Model Type", "Input Features", "Hidden Layers", "Optimizer", "Loss Function", "Early Stopping"],
-            "Value":      ["ANN",        "11",             "4",             "Adam",      "BCELoss",        "Yes (patience=50)"]
+            "Parameter": ["Model Type", "Input Features", "Hidden Layers", "Optimizer", "Loss Function", "Early Stopping"],
+            "Value": ["ANN", "11", "4", "Adam", "BCELoss", "Yes (patience=50)"]
         }), use_container_width=True)
     with col2:
         st.dataframe(pd.DataFrame({
-            "Parameter": ["Learning Rate", "Dropout",  "Batch Norm", "Epochs",    "SMOTE",  "Scaler"],
-            "Value":     ["0.01",          "0.3",      "Yes",        "~83",       "Yes",    "StandardScaler"]
+            "Parameter": ["Learning Rate", "Dropout", "Batch Norm", "Epochs", "SMOTE", "Scaler"],
+            "Value": ["0.01", "0.3", "Yes", "~83", "Yes", "StandardScaler"]
         }), use_container_width=True)
 
 
 # About Section----------------------------------------------------------------------------------
 
 if option == "About":
-    pass
+    st.header("About", divider=True)
+
+    #  Project Overview 
+    st.subheader("Bank Customer Churn Prediction")
+    st.markdown("""
+    This app predicts whether a bank customer is likely to **churn (leave)** 
+    using an Artificial Neural Network trained on real customer data.
+    Built with **PyTorch** and deployed using **Streamlit**.
+    """)
+
+    #  Dataset Info 
+    st.subheader("Dataset")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Customers", "10,000")
+    with col2:
+        st.metric("Features", "11")
+    with col3:
+        st.metric("Churn Rate", "20%")
+
+    st.markdown("""
+    The dataset contains bank customer information including:
+    - **Demographics** — Age, Gender, Geography
+    - **Banking Info** — Balance, Credit Score, Tenure, Number of Products
+    - **Behaviour** — Active Member status, Credit Card ownership
+    """)
+
+    #  Model Results 
+    st.subheader("Model Results")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Accuracy", "78%")
+    with col2:
+        st.metric("Class 1 Recall", "75%")
+    with col3:
+        st.metric("Class 1 Precision", "47%")
+    with col4:
+        st.metric("Class 1 F1 Score", "0.58")
+
+    #  Tech Stack 
+    st.subheader("Tech Stack")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.info("**PyTorch**\nModel Training")
+    with col2:
+        st.info("**Scikit-learn**\nPreprocessing")
+    with col3:
+        st.info("**Streamlit**\nDeployment")
+    with col4:
+        st.info("**Plotly**\nVisualizations")
+
+    #  Developer 
+    st.subheader("Developer")
+    st.markdown("""
+    **Asmit Prem Kumar**  
+    [GitHub](https://github.com/Asmitpremkumar16/Customer_Churn)
+    """)
     
